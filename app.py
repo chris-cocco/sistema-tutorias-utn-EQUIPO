@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, g
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from fpdf import FPDF
+from functools import wraps
+import jwt
 import shutil, os, threading, time
 
 app = Flask(__name__)
@@ -128,6 +130,52 @@ def generar_pdf(datos, titulo, columnas):
     pdf.output(ruta)
     return ruta
 
+# ===================== AUTENTICACIÓN POR TOKEN (JWT) =====================
+JWT_ALGORITMO = 'HS256'
+JWT_MINUTOS_EXPIRACION = 30
+
+def generar_token(usuario):
+    payload = {
+        'uid': usuario.id,
+        'rol': usuario.tipo,
+        'nombre': usuario.nombre_completo,
+        'exp': datetime.utcnow() + timedelta(minutes=JWT_MINUTOS_EXPIRACION)
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm=JWT_ALGORITMO)
+
+def obtener_token_peticion():
+    token = request.cookies.get('token')
+    if token:
+        return token
+    encabezado = request.headers.get('Authorization', '')
+    if encabezado.startswith('Bearer '):
+        return encabezado.split(' ', 1)[1]
+    return None
+
+def requiere_rol(*roles_permitidos):
+    def decorador(vista):
+        @wraps(vista)
+        def envoltura(*args, **kwargs):
+            token = obtener_token_peticion()
+            if not token:
+                return redirect(url_for('login'))
+            try:
+                payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWT_ALGORITMO])
+            except jwt.ExpiredSignatureError:
+                flash("Tu sesión ha expirado, inicia sesión nuevamente", "error")
+                return redirect(url_for('login'))
+            except jwt.InvalidTokenError:
+                flash("Sesión inválida", "error")
+                return redirect(url_for('login'))
+            if roles_permitidos and payload['rol'] not in roles_permitidos:
+                return redirect(url_for('login'))
+            g.uid = payload['uid']
+            g.rol = payload['rol']
+            g.nombre = payload['nombre']
+            return vista(*args, **kwargs)
+        return envoltura
+    return decorador
+
 # ===================== LOGIN =====================
 @app.route('/', methods=['GET','POST'])
 def login():
@@ -144,32 +192,34 @@ def login():
             return redirect(url_for('login'))
         usuario.intentos_fallidos = 0
         db.session.commit()
-        session['uid'] = usuario.id
-        session['rol'] = usuario.tipo
-        session['nombre'] = usuario.nombre_completo
         db.session.add(Auditoria(accion=f"INGRESO: {usuario.tipo}", ip=ip, usuario=usuario.nombre_completo))
         db.session.commit()
         flash(f"Bienvenido {usuario.nombre_completo}", "success")
-        return redirect(url_for(f"panel_{usuario.tipo}"))
+        token = generar_token(usuario)
+        respuesta = redirect(url_for(f"panel_{usuario.tipo}"))
+        respuesta.set_cookie('token', token, httponly=True, samesite='Lax',
+                              secure=request.is_secure, max_age=JWT_MINUTOS_EXPIRACION * 60)
+        return respuesta
     return render_template('login.html')
 
 @app.route('/salir')
 def salir():
-    session.clear()
-    return redirect(url_for('login'))
+    respuesta = redirect(url_for('login'))
+    respuesta.delete_cookie('token')
+    return respuesta
 
 # ===================== ALUMNO =====================
 @app.route('/panel-alumno')
+@requiere_rol('alumno')
 def panel_alumno():
-    if 'uid' not in session or session['rol'] != 'alumno': return redirect(url_for('login'))
-    alumno = Alumno.query.filter_by(usuario_id=session['uid']).first()
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
     tutorias = Tutoria.query.filter_by(id_alumno=alumno.id).order_by(Tutoria.fecha.desc()).all()
     return render_template('alumno.html', alumno=alumno, tutorias=tutorias)
 
 @app.route('/solicitar-tutoria', methods=['POST'])
+@requiere_rol('alumno')
 def solicitar_tutoria():
-    if 'uid' not in session or session['rol'] != 'alumno': return redirect(url_for('login'))
-    alumno = Alumno.query.filter_by(usuario_id=session['uid']).first()
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
     fecha = datetime.strptime(request.form['fecha'], '%Y-%m-%d')
     tema = request.form['tema'].strip()
     if not tema: flash("El tema no puede estar vacío", "error"); return redirect(url_for('panel_alumno'))
@@ -180,9 +230,9 @@ def solicitar_tutoria():
     return redirect(url_for('panel_alumno'))
 
 @app.route('/reporte-alumno-pdf')
+@requiere_rol('alumno')
 def reporte_alumno_pdf():
-    if 'uid' not in session or session['rol'] != 'alumno': return redirect(url_for('login'))
-    alumno = Alumno.query.filter_by(usuario_id=session['uid']).first()
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
     tutorias = Tutoria.query.filter_by(id_alumno=alumno.id).all()
     datos = [(t.fecha.strftime('%d/%m/%Y'), t.tema, t.estado, t.observaciones[:30]) for t in tutorias]
     ruta = generar_pdf(datos, f"Mis Tutorías - {alumno.usuario.nombre_completo}", ["Fecha", "Tema", "Estado", "Observaciones"])
@@ -190,10 +240,9 @@ def reporte_alumno_pdf():
 
 # ==== ✅ AQUÍ VAN LOS REPORTES PARA ALUMNO ====
 @app.route('/reportes-alumno')
+@requiere_rol('alumno')
 def reportes_alumno():
-    if 'uid' not in session or session['rol'] != 'alumno':
-        return redirect(url_for('login'))
-    alumno = Alumno.query.filter_by(usuario_id=session['uid']).first()
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
     mis_tutorias = Tutoria.query.filter_by(id_alumno=alumno.id).all()
     total = len(mis_tutorias)
     realizadas = sum(1 for t in mis_tutorias if t.estado == "Realizada")
@@ -204,16 +253,16 @@ def reportes_alumno():
 
 # ===================== TUTOR =====================
 @app.route('/panel-tutor')
+@requiere_rol('tutor')
 def panel_tutor():
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
-    tutor = Tutor.query.filter_by(usuario_id=session['uid']).first()
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     tutorias = Tutoria.query.filter_by(id_tutor=tutor.usuario_id).order_by(Tutoria.fecha.desc()).all()
     alumnos = Alumno.query.filter_by(id_tutor=tutor.usuario_id).all()
     return render_template('tutor.html', tutor=tutor, alumnos=alumnos, tutorias=tutorias)
 
 @app.route('/tutor/aceptar/<int:id>')
+@requiere_rol('tutor')
 def aceptar_tutoria(id):
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
     tut = Tutoria.query.get_or_404(id)
     tut.estado = "Confirmada"
     db.session.commit()
@@ -221,14 +270,14 @@ def aceptar_tutoria(id):
     return redirect(url_for('panel_tutor'))
 
 @app.route('/tutor/editar-tutoria/<int:id>', methods=['GET'])
+@requiere_rol('tutor')
 def form_editar_tutoria(id):
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
     tut = Tutoria.query.get_or_404(id)
     return render_template('editar_tutoria.html', tutoria=tut)
 
 @app.route('/tutor/editar-tutoria/<int:id>', methods=['POST'])
+@requiere_rol('tutor')
 def editar_tutoria(id):
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
     tut = Tutoria.query.get_or_404(id)
     tut.fecha = datetime.strptime(request.form['fecha'], '%Y-%m-%d')
     tut.tema = request.form['tema']
@@ -239,18 +288,18 @@ def editar_tutoria(id):
     return redirect(url_for('panel_tutor'))
 
 @app.route('/tutor/actualizar-horario', methods=['POST'])
+@requiere_rol('tutor')
 def actualizar_horario():
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
-    tutor = Tutor.query.filter_by(usuario_id=session['uid']).first()
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     tutor.horario = request.form['horario']
     db.session.commit()
     flash("Horario actualizado", "success")
     return redirect(url_for('panel_tutor'))
 
 @app.route('/tutor/crear-tutoria', methods=['POST'])
+@requiere_rol('tutor')
 def crear_tutoria():
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
-    tutor = Tutor.query.filter_by(usuario_id=session['uid']).first()
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     fecha = datetime.strptime(request.form['fecha'], '%Y-%m-%d')
     nueva = Tutoria(id_alumno=request.form['id_alumno'], id_tutor=tutor.usuario_id, fecha=fecha, tema=request.form['tema'], estado="Asignada por tutor")
     db.session.add(nueva)
@@ -259,17 +308,17 @@ def crear_tutoria():
     return redirect(url_for('panel_tutor'))
 
 @app.route('/tutor/completar/<int:id>')
+@requiere_rol('tutor')
 def completar_tutoria(id):
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
     Tutoria.query.get_or_404(id).estado = "Realizada"
     db.session.commit()
     flash("Tutoría marcada como realizada", "success")
     return redirect(url_for('panel_tutor'))
 
 @app.route('/reporte-tutor-pdf')
+@requiere_rol('tutor')
 def reporte_tutor_pdf():
-    if 'uid' not in session or session['rol'] != 'tutor': return redirect(url_for('login'))
-    tutor = Tutor.query.filter_by(usuario_id=session['uid']).first()
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     tutorias = Tutoria.query.filter_by(id_tutor=tutor.usuario_id).all()
     datos = [(t.alumno.usuario.nombre_completo, t.fecha.strftime('%d/%m/%Y'), t.tema, t.estado) for t in tutorias]
     ruta = generar_pdf(datos, f"Tutorías a mi cargo - {tutor.usuario.nombre_completo}", ["Alumno", "Fecha", "Tema", "Estado"])
@@ -277,10 +326,9 @@ def reporte_tutor_pdf():
 
 # ==== ✅ AQUÍ VAN LOS REPORTES PARA TUTOR ====
 @app.route('/reportes-tutor')
+@requiere_rol('tutor')
 def reportes_tutor():
-    if 'uid' not in session or session['rol'] != 'tutor':
-        return redirect(url_for('login'))
-    tutor = Tutor.query.filter_by(usuario_id=session['uid']).first()
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     mis_tutorias = Tutoria.query.filter_by(id_tutor=tutor.usuario_id).all()
     mis_alumnos = Alumno.query.filter_by(id_tutor=tutor.usuario_id).count()
     total = len(mis_tutorias)
@@ -292,16 +340,16 @@ def reportes_tutor():
 
 # ===================== COORDINADOR =====================
 @app.route('/panel-coordinador')
+@requiere_rol('coordinador')
 def panel_coordinador():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     return render_template('coordinador.html',
         usuarios=Usuario.query.all(), tutorias=Tutoria.query.all(),
         auditoria=Auditoria.query.order_by(Auditoria.fecha.desc()).limit(30).all(),
         respaldos=os.listdir(CARPETA_RESPALDOS), cfg=ConfiguracionRespaldos.query.first())
 
 @app.route('/reportes')
+@requiere_rol('coordinador')
 def reportes():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     # === MÓDULO 1: GESTIÓN DE TUTORÍAS ===
     total_tutorias = Tutoria.query.count()
     solicitadas = Tutoria.query.filter_by(estado="Solicitada").count()
@@ -322,67 +370,67 @@ def reportes():
         total_coordinadores=total_coordinadores, activos=activos, bloqueados=bloqueados)
 
 @app.route('/coordinador/crear-usuario', methods=['POST'])
+@requiere_rol('coordinador')
 def crear_usuario():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     tipo = request.form['tipo']; cred = request.form['credencial']; nombre = request.form['nombre']; clave = request.form['contrasena']
     if Usuario.query.filter_by(credencial=cred).first(): flash("Credencial ya existe", "error"); return redirect(url_for('panel_coordinador'))
     nuevo = Usuario(tipo=tipo, credencial=cred, nombre_completo=nombre, contrasena=generate_password_hash(clave))
     db.session.add(nuevo); db.session.flush()
     if tipo == "alumno": db.session.add(Alumno(usuario_id=nuevo.id, id_tutor=None))
     if tipo == "tutor": db.session.add(Tutor(usuario_id=nuevo.id))
-    db.session.add(Auditoria(accion=f"CREÓ USUARIO: {cred}", ip=request.remote_addr, usuario=session.get('nombre')))
+    db.session.add(Auditoria(accion=f"CREÓ USUARIO: {cred}", ip=request.remote_addr, usuario=g.nombre))
     db.session.commit()
     flash("Usuario creado correctamente", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/coordinador/asignar-tutor/<int:id_alumno>', methods=['POST'])
+@requiere_rol('coordinador')
 def asignar_tutor(id_alumno):
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     Alumno.query.get_or_404(id_alumno).id_tutor = request.form['id_tutor']
     db.session.commit()
     flash("Tutor asignado correctamente", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/coordinador/cambiar-estado/<int:id>')
+@requiere_rol('coordinador')
 def cambiar_estado(id):
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     u = Usuario.query.get_or_404(id); u.bloqueado = not u.bloqueado; u.intentos_fallidos = 0
     db.session.commit(); flash("Estado de usuario actualizado", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/coordinador/respaldo-manual')
+@requiere_rol('coordinador')
 def respaldo_manual():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     nom = f"respaldo_manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
     ruta_destino = os.path.join(CARPETA_RESPALDOS, nom)
     shutil.copy2(RUTA_DB, ruta_destino)
-    db.session.add(Auditoria(accion="RESPALDO MANUAL", ip=request.remote_addr, usuario=session.get('nombre')))
+    db.session.add(Auditoria(accion="RESPALDO MANUAL", ip=request.remote_addr, usuario=g.nombre))
     db.session.commit()
     flash(f"✅ Respaldo creado correctamente: {nom}", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/coordinador/restaurar/<nombre>')
+@requiere_rol('coordinador')
 def restaurar(nombre):
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     ruta_origen = os.path.join(CARPETA_RESPALDOS, nombre)
     if os.path.exists(ruta_origen):
         shutil.copy2(ruta_origen, RUTA_DB)
-        db.session.add(Auditoria(accion=f"RESTAURÓ: {nombre}", ip=request.remote_addr, usuario=session.get('nombre')))
+        db.session.add(Auditoria(accion=f"RESTAURÓ: {nombre}", ip=request.remote_addr, usuario=g.nombre))
         flash("✅ Base restaurada correctamente", "success")
     else:
         flash("❌ Archivo de respaldo no encontrado", "error")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/coordinador/config-respaldos', methods=['POST'])
+@requiere_rol('coordinador')
 def config_respaldos():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     cfg = ConfiguracionRespaldos.query.first(); cfg.activo = 'activo' in request.form; cfg.intervalo_horas = int(request.form['intervalo'])
     db.session.commit(); flash("✅ Configuración guardada", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/reporte-general-pdf')
+@requiere_rol('coordinador')
 def reporte_general_pdf():
-    if 'uid' not in session or session['rol'] != 'coordinador': return redirect(url_for('login'))
     datos = [(u.tipo.upper(), u.credencial, u.nombre_completo, "Bloqueado" if u.bloqueado else "Activo") for u in Usuario.query.all()]
     ruta = generar_pdf(datos, "Reporte General", ["Rol", "Credencial", "Nombre", "Estado"])
     return send_file(ruta, as_attachment=True, download_name="reporte_general.pdf")
