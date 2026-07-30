@@ -176,6 +176,29 @@ def requiere_rol(*roles_permitidos):
         return envoltura
     return decorador
 
+def requiere_rol_api(*roles_permitidos):
+    """Igual que requiere_rol, pero para la API: responde JSON en vez de redirigir al login."""
+    def decorador(vista):
+        @wraps(vista)
+        def envoltura(*args, **kwargs):
+            token = obtener_token_peticion()
+            if not token:
+                return {'error': 'No se proporcionó un token de acceso'}, 401
+            try:
+                payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWT_ALGORITMO])
+            except jwt.ExpiredSignatureError:
+                return {'error': 'El token ha expirado, inicia sesión nuevamente'}, 401
+            except jwt.InvalidTokenError:
+                return {'error': 'Token inválido'}, 401
+            if roles_permitidos and payload['rol'] not in roles_permitidos:
+                return {'error': 'No tienes permiso para acceder a este recurso'}, 403
+            g.uid = payload['uid']
+            g.rol = payload['rol']
+            g.nombre = payload['nombre']
+            return vista(*args, **kwargs)
+        return envoltura
+    return decorador
+
 # ===================== LOGIN =====================
 @app.route('/', methods=['GET','POST'])
 def login():
@@ -434,6 +457,110 @@ def reporte_general_pdf():
     datos = [(u.tipo.upper(), u.credencial, u.nombre_completo, "Bloqueado" if u.bloqueado else "Activo") for u in Usuario.query.all()]
     ruta = generar_pdf(datos, "Reporte General", ["Rol", "Credencial", "Nombre", "Estado"])
     return send_file(ruta, as_attachment=True, download_name="reporte_general.pdf")
+
+# ===================== API (APP MÓVIL / WEAR OS) =====================
+def tutoria_a_json(t):
+    return {
+        'id': t.id,
+        'fecha': t.fecha.strftime('%Y-%m-%d'),
+        'tema': t.tema,
+        'estado': t.estado,
+        'observaciones': t.observaciones,
+        'alumno': t.alumno.usuario.nombre_completo if t.alumno else None,
+    }
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    datos = request.get_json(silent=True) or {}
+    cred = (datos.get('credencial') or '').strip()
+    passw = (datos.get('contrasena') or '').strip()
+    usuario = Usuario.query.filter_by(credencial=cred).first()
+    if not usuario or not check_password_hash(usuario.contrasena, passw):
+        return {'error': 'Credenciales incorrectas'}, 401
+    if usuario.bloqueado:
+        return {'error': 'Usuario bloqueado'}, 403
+    db.session.add(Auditoria(accion=f"INGRESO (app móvil): {usuario.tipo}", ip=request.remote_addr, usuario=usuario.nombre_completo))
+    db.session.commit()
+    token = generar_token(usuario)
+    return {'token': token, 'uid': usuario.id, 'rol': usuario.tipo, 'nombre': usuario.nombre_completo}
+
+@app.route('/api/perfil')
+@requiere_rol_api()
+def api_perfil():
+    return {'uid': g.uid, 'rol': g.rol, 'nombre': g.nombre}
+
+@app.route('/api/alumno/tutorias')
+@requiere_rol_api('alumno')
+def api_alumno_tutorias():
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
+    tutorias = Tutoria.query.filter_by(id_alumno=alumno.id).order_by(Tutoria.fecha.desc()).all()
+    return {'tutorias': [tutoria_a_json(t) for t in tutorias]}
+
+@app.route('/api/alumno/tutorias', methods=['POST'])
+@requiere_rol_api('alumno')
+def api_alumno_solicitar_tutoria():
+    alumno = Alumno.query.filter_by(usuario_id=g.uid).first()
+    datos = request.get_json(silent=True) or {}
+    try:
+        fecha = datetime.strptime(datos.get('fecha', ''), '%Y-%m-%d')
+    except ValueError:
+        return {'error': 'Fecha inválida, usa el formato AAAA-MM-DD'}, 400
+    tema = (datos.get('tema') or '').strip()
+    if not tema:
+        return {'error': 'El tema no puede estar vacío'}, 400
+    nueva = Tutoria(id_alumno=alumno.id, id_tutor=alumno.id_tutor, fecha=fecha, tema=tema, estado="Solicitada")
+    db.session.add(nueva)
+    db.session.commit()
+    return {'mensaje': 'Solicitud enviada al tutor', 'tutoria': tutoria_a_json(nueva)}, 201
+
+@app.route('/api/tutor/tutorias')
+@requiere_rol_api('tutor')
+def api_tutor_tutorias():
+    tutorias = Tutoria.query.filter_by(id_tutor=g.uid).order_by(Tutoria.fecha.desc()).all()
+    return {'tutorias': [tutoria_a_json(t) for t in tutorias]}
+
+@app.route('/api/tutor/tutorias/<int:id>/aceptar', methods=['POST'])
+@requiere_rol_api('tutor')
+def api_tutor_aceptar(id):
+    tut = Tutoria.query.get_or_404(id)
+    tut.estado = "Confirmada"
+    db.session.commit()
+    return {'mensaje': 'Tutoría aceptada', 'tutoria': tutoria_a_json(tut)}
+
+@app.route('/api/tutor/tutorias/<int:id>/completar', methods=['POST'])
+@requiere_rol_api('tutor')
+def api_tutor_completar(id):
+    tut = Tutoria.query.get_or_404(id)
+    tut.estado = "Realizada"
+    db.session.commit()
+    return {'mensaje': 'Tutoría marcada como realizada', 'tutoria': tutoria_a_json(tut)}
+
+@app.route('/api/coordinador/resumen')
+@requiere_rol_api('coordinador')
+def api_coordinador_resumen():
+    return {
+        'tutorias': {
+            'total': Tutoria.query.count(),
+            'solicitadas': Tutoria.query.filter_by(estado="Solicitada").count(),
+            'confirmadas': Tutoria.query.filter_by(estado="Confirmada").count(),
+            'realizadas': Tutoria.query.filter_by(estado="Realizada").count(),
+            'asignadas': Tutoria.query.filter_by(estado="Asignada por tutor").count(),
+        },
+        'usuarios': {
+            'alumnos': Usuario.query.filter_by(tipo="alumno").count(),
+            'tutores': Usuario.query.filter_by(tipo="tutor").count(),
+            'activos': Usuario.query.filter_by(bloqueado=False).count(),
+            'bloqueados': Usuario.query.filter_by(bloqueado=True).count(),
+        }
+    }
+
+@app.route('/api/coordinador/usuarios')
+@requiere_rol_api('coordinador')
+def api_coordinador_usuarios():
+    return {'usuarios': [{
+        'id': u.id, 'tipo': u.tipo, 'credencial': u.credencial,
+        'nombre': u.nombre_completo, 'bloqueado': u.bloqueado
+    } for u in Usuario.query.all()]}
 
 if __name__ == '__main__':
     modo_debug = os.environ.get('FLASK_DEBUG', '0') == '1'
