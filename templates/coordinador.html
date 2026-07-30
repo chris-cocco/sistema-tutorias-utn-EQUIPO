@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Coordinador - Sistema de Tutorías</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --verde-ut: #0E7C70;
+            --verde-sec: #15803D;
+            --verde-suave: #E6F7F5;
+            --verde-claro: #F0FDF4;
+            --texto-principal: #1E293B;
+            --texto-sec: #64748B;
+            --borde-suave: #CCEBE8;
+            --sombra-suave: 0 4px 16px rgba(14, 124, 112, 0.08);
+        }
+        * { font-family: 'Inter', sans-serif; color: var(--texto-principal); }
+        body { background-color: var(--verde-claro); min-height: 100vh; }
+        .navbar { background: white; border-bottom: 1px solid var(--borde-suave); box-shadow: 0 2px 8px rgba(14, 124, 112, 0.05); }
+        .card { background: white; border-radius: 18px; border: 1px solid var(--borde-suave); box-shadow: var(--sombra-suave); transition: all 0.25s ease; }
+        .card:hover { box-shadow: 0 6px 20px rgba(14, 124, 112, 0.12); transform: translateY(-1px); }
+        .titulo-seccion { color: var(--verde-ut); font-weight: 700; font-size: 1.25rem; }
+        .btn-ut { background: var(--verde-ut); color: white; border-radius: 12px; font-weight: 500; transition: all 0.25s ease; }
+        .btn-ut:hover { background: var(--verde-sec); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(14, 124, 112, 0.18); }
+        .input, .select { background: var(--verde-claro); border: 1px solid var(--borde-suave); border-radius: 12px; transition: all 0.25s ease; }
+        .input:focus, .select:focus { border-color: var(--verde-ut); box-shadow: 0 0 0 3px rgba(14, 124, 112, 0.12); background: white; }
+        .menu a { border-radius: 10px; margin: 4px 0; transition: all 0.2s ease; }
+        .menu a.active { background: var(--verde-suave); color: var(--verde-ut); font-weight: 600; }
+        .menu a:hover { background: var(--verde-suave); color: var(--verde-ut); }
+        .table thead { background: var(--verde-suave); color: var(--verde-ut); font-weight: 600; }
+        .table tbody tr:hover { background: var(--verde-claro); }
+        .badge-exito { background: var(--verde-suave); color: var(--verde-ut); border-radius: 8px; font-weight: 500; }
+        .badge-error { background: #FEE2E2; color: #B91C1C; border-radius: 8px; font-weight: 500; }
+        .numero-dato { color: var(--verde-ut); font-weight: 700; font-size: 1.875rem; }
+    </style>
+</head>
+<body>
+    <div class="drawer lg:drawer-open">
+        <input id="menu" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <div class="navbar px-4">
+                <label for="menu" class="btn btn-square btn-ghost lg:hidden">☰</label>
+                <div class="flex-1 text-xl font-bold text-[#0E7C70]">PANEL DE COORDINADOR</div>
+                <a href="{{url_for('salir')}}" class="btn btn-error btn-sm rounded-xl">Cerrar Sesión</a>
+            </div>
+            <div class="p-6 max-w-7xl mx-auto">
+                {% with m=get_flashed_messages(with_categories=true) %}{% if m %}<div class="alert alert-{{m[0][0]}} mb-4 rounded-xl">{{m[0][1]}}</div>{% endif %}{% endwith %}
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="card text-center p-6"><h3 class="numero-dato mb-2">{{usuarios|selectattr('tipo','equalto','alumno')|list|length}}</h3><p class="text-gray-600">Alumnos</p></div>
+                    <div class="card text-center p-6"><h3 class="numero-dato mb-2">{{usuarios|selectattr('tipo','equalto','tutor')|list|length}}</h3><p class="text-gray-600">Tutores</p></div>
+                    <div class="card text-center p-6"><h3 class="numero-dato mb-2">{{tutorias|length}}</h3><p class="text-gray-600">Tutorías Totales</p></div>
+                </div>
+
+                <div class="card mb-6 p-6">
+                    <h3 class="titulo-seccion mb-4">Crear Nuevo Usuario</h3>
+                    <form method="POST" action="{{url_for('crear_usuario')}}" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <select name="tipo" class="select py-2 px-3" required>
+                            <option value="">Rol</option>
+                            <option value="alumno">Alumno</option>
+                            <option value="tutor">Tutor</option>
+                            <option value="coordinador">Coordinador</option>
+                        </select>
+                        <input type="text" name="credencial" class="input py-2 px-3" required>
+                        <input type="text" name="nombre" class="input py-2 px-3" required>
+                        <input type="text" name="contrasena" class="input py-2 px-3" required>
+                        <button class="btn btn-ut">Crear</button>
+                    </form>
+                </div>
+
+                <div class="card mb-6 p-6">
+                    <h3 class="titulo-seccion mb-4">Administrar Usuarios</h3>
+                    <table class="table w-full">
+                        <thead><tr><th>Rol</th><th>Credencial</th><th>Nombre</th><th>Estado</th><th>Asignar Tutor</th><th>Acción</th></tr></thead>
+                        <tbody>
+                            {% for u in usuarios %}
+                            <tr>
+                                <td>{{u.tipo|upper}}</td>
+                                <td>{{u.credencial}}</td>
+                                <td>{{u.nombre_completo}}</td>
+                                <td><span class="badge {{'badge-error' if u.bloqueado else 'badge-exito'}}">{{'Bloqueado' if u.bloqueado else 'Activo'}}</span></td>
+                                <td>
+                                    {% if u.tipo == 'alumno' and u.perfil_alumno %}
+                                    <form method="POST" action="{{url_for('asignar_tutor', id_alumno=u.perfil_alumno.id)}}" class="flex gap-1">
+                                        <select name="id_tutor" class="select w-32 py-1 px-2" required>
+                                            <option value="">Selecciona</option>
+                                            {% for t in usuarios %}{% if t.tipo == 'tutor' %}<option value="{{t.id}}">{{t.nombre_completo}}</option>{% endif %}{% endfor %}
+                                        </select>
+                                        <button class="btn btn-xs rounded-xl">Asignar</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                                <td><a href="{{url_for('cambiar_estado', id=u.id)}}" class="btn btn-xs rounded-xl">{{'Desbloquear' if u.bloqueado else 'Bloquear'}}</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card mb-6 p-6">
+                    <h3 class="titulo-seccion mb-4">Respaldos y Recuperación</h3>
+                    <div class="flex gap-3 mb-4 flex-wrap">
+                        <a href="{{url_for('respaldo_manual')}}" class="btn btn-success">Crear Respaldo</a>
+                        <a href="{{url_for('reporte_general_pdf')}}" class="btn btn-ut">Reporte General PDF</a>
+                    </div>
+                    <form method="POST" action="{{url_for('config_respaldos')}}" class="flex gap-3 items-center mb-4 flex-wrap">
+                        <label class="label"><input type="checkbox" name="activo" class="toggle" {{'checked' if cfg.activo else ''}}> Respaldo automático</label>
+                        <input type="number" name="intervalo" class="input w-24 py-2 px-3" min="1" value="{{cfg.intervalo_horas}}"> horas
+                        <button class="btn rounded-xl">Guardar</button>
+                    </form>
+                    <h4 class="font-semibold mb-2">Respaldos disponibles:</h4>
+                    <div class="flex flex-wrap gap-2">
+                        {% for r in respaldos %}
+                        <div class="badge p-2 bg-[#E6F7F5]">{{r}} <a href="{{url_for('restaurar', nombre=r)}}" class="btn btn-xs btn-error ml-2" onclick="return confirm('¿Restaurar? Se perderá la información actual')">Restaurar</a></div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="titulo-seccion mb-4">Auditoría de Acciones</h3>
+                    <table class="table w-full">
+                        <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>IP</th></tr></thead>
+                        <tbody>
+                            {% for a in auditoria %}<tr><td>{{a.fecha.strftime('%d/%m/%Y %H:%M')}}</td><td>{{a.usuario}}</td><td>{{a.accion}}</td><td>{{a.ip}}</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="drawer-side border-r border-[#CCEBE8]"><label for="menu" class="drawer-overlay"></label>
+            <ul class="menu bg-white w-56 p-4">
+                <li class="font-bold mb-3 text-[#0E7C70]">MENÚ ADMINISTRADOR</li>
+                <li><a href="{{url_for('panel_coordinador')}}" class="active">Inicio</a></li>
+                <li><a href="{{url_for('reportes')}}">Estadísticas</a></li>
+                <li><a href="{{url_for('reporte_general_pdf')}}">Reporte PDF</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

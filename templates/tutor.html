@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Tutor - Sistema de Tutorías</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --verde-ut: #0E7C70;
+            --verde-sec: #15803D;
+            --verde-suave: #E6F7F5;
+            --verde-claro: #F0FDF4;
+            --texto-principal: #1E293B;
+            --texto-sec: #64748B;
+            --borde-suave: #CCEBE8;
+            --sombra-suave: 0 4px 16px rgba(14, 124, 112, 0.08);
+        }
+        * { font-family: 'Inter', sans-serif; color: var(--texto-principal); }
+        body { background-color: var(--verde-claro); min-height: 100vh; }
+        .navbar { background: white; border-bottom: 1px solid var(--borde-suave); box-shadow: 0 2px 8px rgba(14, 124, 112, 0.05); }
+        .card { background: white; border-radius: 18px; border: 1px solid var(--borde-suave); box-shadow: var(--sombra-suave); transition: all 0.25s ease; }
+        .card:hover { box-shadow: 0 6px 20px rgba(14, 124, 112, 0.12); transform: translateY(-1px); }
+        .titulo-seccion { color: var(--verde-ut); font-weight: 700; font-size: 1.25rem; }
+        .btn-ut { background: var(--verde-ut); color: white; border-radius: 12px; font-weight: 500; transition: all 0.25s ease; }
+        .btn-ut:hover { background: var(--verde-sec); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(14, 124, 112, 0.18); }
+        .input, .select { background: var(--verde-claro); border: 1px solid var(--borde-suave); border-radius: 12px; transition: all 0.25s ease; }
+        .input:focus, .select:focus { border-color: var(--verde-ut); box-shadow: 0 0 0 3px rgba(14, 124, 112, 0.12); background: white; }
+        .menu a { border-radius: 10px; margin: 4px 0; transition: all 0.2s ease; }
+        .menu a.active { background: var(--verde-suave); color: var(--verde-ut); font-weight: 600; }
+        .menu a:hover { background: var(--verde-suave); color: var(--verde-ut); }
+        .table thead { background: var(--verde-suave); color: var(--verde-ut); font-weight: 600; }
+        .table tbody tr:hover { background: var(--verde-claro); }
+        .badge-exito { background: var(--verde-suave); color: var(--verde-ut); border-radius: 8px; font-weight: 500; }
+        .badge-aviso { background: #FFFBEB; color: #B45309; border-radius: 8px; font-weight: 500; }
+        .badge-info { background: #EFF6FF; color: #1D4ED8; border-radius: 8px; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="drawer lg:drawer-open">
+        <input id="menu" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content">
+            <div class="navbar px-4">
+                <label for="menu" class="btn btn-square btn-ghost lg:hidden">☰</label>
+                <div class="flex-1 text-xl font-bold text-[#0E7C70]">PANEL DE TUTOR</div>
+                <a href="{{url_for('salir')}}" class="btn btn-error btn-sm rounded-xl">Cerrar Sesión</a>
+            </div>
+            <div class="p-6 max-w-6xl mx-auto">
+                {% with m=get_flashed_messages(with_categories=true) %}{% if m %}<div class="alert alert-{{m[0][0]}} mb-4 rounded-xl">{{m[0][1]}}</div>{% endif %}{% endwith %}
+
+                <div class="card mb-6 p-6">
+                    <h3 class="titulo-seccion mb-4">Mis Datos</h3>
+                    <p class="mb-3"><strong>Nombre:</strong> {{tutor.usuario.nombre_completo}}</p>
+                    <form method="POST" action="{{url_for('actualizar_horario')}}" class="flex gap-2 mb-3">
+                        <input type="text" name="horario" class="input flex-1 py-2 px-3" value="{{tutor.horario}}" required>
+                        <button class="btn rounded-xl">Actualizar Horario</button>
+                    </form>
+                    <a href="{{url_for('reporte_tutor_pdf')}}" class="btn btn-ut btn-sm">Descargar reporte PDF</a>
+                </div>
+
+                <div class="card mb-6 p-6">
+                    <h3 class="titulo-seccion mb-4">Asignar Nueva Tutoría</h3>
+                    <form method="POST" action="{{url_for('crear_tutoria')}}" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <select name="id_alumno" class="select py-2 px-3" required>
+                            <option value="">Selecciona alumno</option>
+                            {% for a in alumnos %}<option value="{{a.id}}">{{a.usuario.nombre_completo}}</option>{% endfor %}
+                        </select>
+                        <input type="date" name="fecha" class="input py-2 px-3" required>
+                        <input type="text" name="tema" class="input py-2 px-3" required>
+                        <button class="btn btn-ut">Crear</button>
+                    </form>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="titulo-seccion mb-4">Tutorías a mi cargo</h3>
+                    <table class="table w-full">
+                        <thead><tr><th>Alumno</th><th>Fecha</th><th>Tema</th><th>Estado</th><th>Acciones</th></tr></thead>
+                        <tbody>
+                            {% for t in tutorias %}
+                            <tr>
+                                <td>{{t.alumno.usuario.nombre_completo}}</td>
+                                <td>{{t.fecha.strftime('%d/%m/%Y')}}</td>
+                                <td>{{t.tema}}</td>
+                                <td><span class="badge {% if t.estado == 'Solicitada' %}badge-aviso{% elif t.estado == 'Realizada' %}badge-exito{% else %}badge-info{% endif %}">{{t.estado}}</span></td>
+                                <td>
+                                    {% if t.estado == 'Solicitada' %}
+                                    <a href="{{url_for('aceptar_tutoria', id=t.id)}}" class="btn btn-xs btn-success mr-1">Aceptar</a>
+                                    <a href="{{url_for('form_editar_tutoria', id=t.id)}}" class="btn btn-xs btn-ut">Editar</a>
+                                    {% endif %}
+                                    <a href="{{url_for('completar_tutoria', id=t.id)}}" class="btn btn-xs btn-success ml-1">Completar</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center py-6 text-gray-500">Sin tutorías pendientes</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="drawer-side border-r border-[#CCEBE8]"><label for="menu" class="drawer-overlay"></label>
+            <ul class="menu bg-white w-56 p-4">
+                <li class="font-bold mb-3 text-[#0E7C70]">MENÚ</li>
+                <li><a href="{{url_for('panel_tutor')}}" class="active">Inicio</a></li>
+                <li><a href="{{url_for('reporte_tutor_pdf')}}">Reporte PDF</a></li>
+                <li><a href="{{url_for('reportes_tutor')}}">Mis Reportes</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio de Sesión - Sistema de Tutorías</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --verde-ut: #0E7C70;
+            --verde-sec: #15803D;
+            --verde-suave: #E6F7F5;
+            --verde-claro: #F0FDF4;
+            --texto-principal: #1E293B;
+            --texto-sec: #64748B;
+            --borde-suave: #CCEBE8;
+            --sombra-suave: 0 8px 32px rgba(14, 124, 112, 0.12);
+            --sombra-fuerte: 0 12px 40px rgba(14, 124, 112, 0.18);
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+            color: var(--texto-principal);
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--verde-claro) 0%, var(--verde-suave) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before,
+        body::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: rgba(14, 124, 112, 0.05);
+            z-index: 0;
+        }
+        body::before { top: -150px; right: -150px; }
+        body::after { bottom: -150px; left: -150px; }
+
+        .card-login {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-radius: 24px;
+            box-shadow: var(--sombra-suave);
+            border: 1px solid var(--borde-suave);
+            width: 100%;
+            max-width: 420px;
+            padding: 2.5rem 2rem;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        .card-login:hover {
+            box-shadow: var(--sombra-fuerte);
+            transform: translateY(-2px);
+        }
+
+        .encabezado {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .titulo {
+            color: var(--verde-ut);
+            font-weight: 700;
+            font-size: 1.875rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.5px;
+        }
+
+        .subtitulo {
+            color: var(--texto-sec);
+            font-weight: 400;
+            font-size: 0.95rem;
+        }
+
+        .grupo-input {
+            margin-bottom: 1.5rem;
+        }
+
+        .grupo-input:last-of-type {
+            margin-bottom: 2rem;
+        }
+
+        .label {
+            color: var(--texto-sec);
+            font-weight: 500;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background-color: var(--verde-claro);
+            border: 1px solid var(--borde-suave);
+            border-radius: 14px;
+            font-size: 1rem;
+            transition: all 0.25s ease;
+            outline: none;
+        }
+
+        .input:focus {
+            background-color: #FFFFFF;
+            border-color: var(--verde-ut);
+            box-shadow: 0 0 0 4px rgba(14, 124, 112, 0.12);
+        }
+
+        .btn-ingresar {
+            width: 100%;
+            padding: 0.875rem;
+            background-color: var(--verde-ut);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            letter-spacing: 0.3px;
+        }
+
+        .btn-ingresar:hover {
+            background-color: var(--verde-sec);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(14, 124, 112, 0.2);
+        }
+
+        .btn-ingresar:active {
+            transform: translateY(0);
+        }
+
+        .alert {
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="card-login">
+        <div class="encabezado">
+            <h2 class="titulo">SISTEMA DE TUTORÍAS</h2>
+            <p class="subtitulo">Universidad Tecnológica de Nayarit</p>
+        </div>
+
+        {% with mensajes = get_flashed_messages(with_categories=true) %}
+            {% if mensajes %}
+                {% for categoria, texto in mensajes %}
+                    <div class="alert alert-{{ 'success' if categoria == 'success' else 'error' }}">
+                        {{ texto }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="grupo-input">
+                <label class="label">Credencial</label>
+                <input type="text" name="credencial" class="input" required autocomplete="off">
+            </div>
+
+            <div class="grupo-input">
+                <label class="label">Contraseña</label>
+                <input type="password" name="contrasena" class="input" required>
+            </div>
+
+            <button type="submit" class="btn-ingresar">Iniciar Sesión</button>
+        </form>
+    </div>
+</body>
+</html>

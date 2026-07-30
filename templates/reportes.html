@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes Generales - Sistema de Tutorías UT Nayarit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --verde-ut: #0E7C70;
+            --verde-sec: #15803D;
+            --verde-suave: #E6F7F5;
+            --verde-claro: #F0FDF4;
+            --texto-principal: #1E293B;
+            --texto-sec: #64748B;
+            --borde-suave: #CCEBE8;
+            --sombra-suave: 0 4px 16px rgba(14, 124, 112, 0.08);
+        }
+        * {
+            font-family: 'Inter', sans-serif;
+            color: var(--texto-principal);
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: var(--verde-claro);
+            font-size: 0.95rem;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+        h2 {
+            font-size: 1.5rem;
+            color: var(--verde-ut);
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+        h3 {
+            font-size: 1.15rem;
+            color: var(--verde-ut);
+            font-weight: 600;
+            border-bottom: 1px solid var(--borde-suave);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 18px;
+            box-shadow: var(--sombra-suave);
+            border: 1px solid var(--borde-suave);
+            transition: all 0.25s ease;
+        }
+        .card:hover {
+            box-shadow: 0 6px 20px rgba(14, 124, 112, 0.12);
+            transform: translateY(-1px);
+        }
+        .btn {
+            border-radius: 12px;
+            transition: all 0.25s ease;
+        }
+        .btn:hover {
+            background-color: var(--verde-suave);
+            transform: translateY(-1px);
+        }
+        .numero-dato {
+            color: var(--verde-ut);
+            font-weight: 700;
+            font-size: 1.8rem;
+        }
+        section {
+            margin-bottom: 2.5rem;
+        }
+        section:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-6xl mx-auto">
+        <a href="{{url_for('panel_coordinador')}}" class="btn btn-ghost mb-4">← Volver al Panel</a>
+        <h2 class="text-center">Reportes Generales del Sistema</h2>
+
+        <!-- MÓDULO 1: TUTORÍAS -->
+        <section>
+            <h3>Gestión de Tutorías</h3>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Total</p>
+                    <p class="numero-dato">{{total_tutorias}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Solicitadas</p>
+                    <p class="text-2xl font-bold text-amber-600">{{solicitadas}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Confirmadas</p>
+                    <p class="text-2xl font-bold text-blue-600">{{confirmadas}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Asignadas</p>
+                    <p class="text-2xl font-bold text-purple-600">{{asignadas}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Realizadas</p>
+                    <p class="numero-dato">{{realizadas}}</p>
+                </div>
+            </div>
+            <div class="max-w-lg mx-auto p-5 card">
+                <canvas id="graficaTutorias"></canvas>
+            </div>
+        </section>
+
+        <!-- MÓDULO 2: USUARIOS -->
+        <section>
+            <h3>Gestión de Usuarios</h3>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Alumnos</p>
+                    <p class="numero-dato">{{total_alumnos}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Tutores</p>
+                    <p class="numero-dato">{{total_tutores}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Coordinadores</p>
+                    <p class="numero-dato">{{total_coordinadores}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Activos</p>
+                    <p class="numero-dato">{{activos}}</p>
+                </div>
+                <div class="card text-center p-4">
+                    <p class="text-sm text-gray-500 mb-1">Bloqueados</p>
+                    <p class="text-2xl font-bold text-red-600">{{bloqueados}}</p>
+                </div>
+            </div>
+            <div class="max-w-lg mx-auto p-5 card">
+                <canvas id="graficaUsuarios"></canvas>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        new Chart(document.getElementById('graficaTutorias'), {
+            type: 'bar',
+            data: {
+                labels: ['Solicitadas', 'Confirmadas', 'Asignadas', 'Realizadas'],
+                datasets: [{
+                    label: 'Cantidad',
+                    data: [{{solicitadas}}, {{confirmadas}}, {{asignadas}}, {{realizadas}}],
+                    backgroundColor: ['#F59E0B', '#3B82F6', '#8B5CF6', '#0E7C70'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estado de Tutorías',
+                        font: { size: 15, weight: 'bold', family: 'Inter' },
+                        color: '#1E293B'
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                }
+            }
+        });
+
+        new Chart(document.getElementById('graficaUsuarios'), {
+            type: 'pie',
+            data: {
+                labels: ['Alumnos', 'Tutores', 'Coordinadores'],
+                datasets: [{
+                    data: [{{total_alumnos}}, {{total_tutores}}, {{total_coordinadores}}],
+                    backgroundColor: ['#6366F1', '#14B8A6', '#F43F5E'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Distribución de Usuarios',
+                        font: { size: 15, weight: 'bold', family: 'Inter' },
+                        color: '#1E293B'
+                    },
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

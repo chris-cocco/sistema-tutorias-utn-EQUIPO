@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes de Tutor - Sistema de Tutorías</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --verde-ut: #0E7C70;
+            --verde-sec: #15803D;
+            --verde-suave: #E6F7F5;
+            --verde-claro: #F0FDF4;
+            --texto-principal: #1E293B;
+            --texto-sec: #64748B;
+            --borde-suave: #CCEBE8;
+            --sombra-suave: 0 4px 16px rgba(14, 124, 112, 0.08);
+        }
+        * { font-family: 'Inter', sans-serif; color: var(--texto-principal); }
+        body { background-color: var(--verde-claro); min-height: 100vh; padding: 1.5rem; }
+        .card { background: white; border-radius: 18px; border: 1px solid var(--borde-suave); box-shadow: var(--sombra-suave); transition: all 0.25s ease; }
+        .card:hover { box-shadow: 0 6px 20px rgba(14, 124, 112, 0.12); transform: translateY(-1px); }
+        .titulo { color: var(--verde-ut); font-weight: 700; font-size: 1.5rem; }
+        .titulo-seccion { color: var(--verde-ut); font-weight: 600; font-size: 1.15rem; border-bottom: 1px solid var(--borde-suave); padding-bottom: 0.5rem; }
+        .numero-dato { color: var(--verde-ut); font-weight: 700; font-size: 1.8rem; }
+        .btn { border-radius: 12px; transition: all 0.25s ease; }
+        .btn-ut { background: var(--verde-ut); color: white; font-weight: 500; }
+        .btn-ut:hover { background: var(--verde-sec); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(14, 124, 112, 0.18); }
+        .table thead { background: var(--verde-suave); color: var(--verde-ut); font-weight: 600; }
+        .table tbody tr:hover { background: var(--verde-claro); }
+        .badge-exito { background: var(--verde-suave); color: var(--verde-ut); border-radius: 8px; font-weight: 500; }
+        .badge-aviso { background: #FFFBEB; color: #B45309; border-radius: 8px; font-weight: 500; }
+    </style>
+</head>
+<body class="max-w-5xl mx-auto">
+    <a href="{{url_for('panel_tutor')}}" class="btn btn-ghost mb-4">← Volver al Panel</a>
+    <h2 class="titulo mb-6">Mis Tutorías y Alumnos</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="card text-center p-5">
+            <h3 class="numero-dato text-3xl mb-2">{{alumnos}}</h3>
+            <p class="text-gray-600">Alumnos Asignados</p>
+        </div>
+        <div class="card text-center p-5">
+            <h3 class="numero-dato text-3xl mb-2">{{total}}</h3>
+            <p class="text-gray-600">Total Tutorías</p>
+        </div>
+        <div class="card text-center p-5">
+            <h3 class="numero-dato text-3xl mb-2">{{realizadas}}</h3>
+            <p class="text-gray-600">Realizadas</p>
+        </div>
+        <div class="card text-center p-5">
+            <h3 class="text-3xl font-bold text-amber-600 mb-2">{{pendientes}}</h3>
+            <p class="text-gray-600">Pendientes</p>
+        </div>
+    </div>
+
+    <div class="max-w-md mx-auto mb-8 p-4 card">
+        <canvas id="graficaTutor"></canvas>
+    </div>
+
+    <div class="card p-6">
+        <h3 class="titulo-seccion mb-4">Detalle de tutorías a mi cargo</h3>
+        <table class="table w-full">
+            <thead>
+                <tr>
+                    <th>Alumno</th>
+                    <th>Fecha</th>
+                    <th>Tema</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tutorias %}
+                <tr>
+                    <td>{{t.alumno.usuario.nombre_completo}}</td>
+                    <td>{{t.fecha.strftime('%d/%m/%Y')}}</td>
+                    <td>{{t.tema}}</td>
+                    <td>
+                        <span class="badge {{'badge-exito' if t.estado=='Realizada' else 'badge-aviso'}}">
+                            {{t.estado}}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        new Chart(document.getElementById('graficaTutor'), {
+            type: 'bar',
+            data: {
+                labels: ['Realizadas', 'Pendientes'],
+                datasets: [{
+                    label: 'Cantidad',
+                    data: [{{realizadas}}, {{pendientes}}],
+                    backgroundColor: ['#0E7C70', '#F59E0B'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                plugins: {
+                    title: { display: true, text: 'Estado de mis Tutorías', font: { size: 14, weight: 'bold', family: 'Inter' } },
+                    legend: { display: false }
+                },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
+    </script>
+</body>
+</html>
