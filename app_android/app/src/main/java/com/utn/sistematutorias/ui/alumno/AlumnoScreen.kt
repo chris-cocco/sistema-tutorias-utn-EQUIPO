@@ -137,15 +137,23 @@ private fun DialogoSolicitarTutoria(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = fechaTexto,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Fecha") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { mostrarSelectorFecha = true }
-                )
+                Box {
+                    OutlinedTextField(
+                        value = fechaTexto,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Fecha") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Capa transparente encima: un OutlinedTextField de solo lectura
+                    // intercepta el toque para el cursor antes que un .clickable propio,
+                    // así que se necesita esta capa para que el toque sí abra el selector.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { mostrarSelectorFecha = true }
+                    )
+                }
             }
         },
         confirmButton = {
