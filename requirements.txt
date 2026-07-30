@@ -1,0 +1,6 @@
+flask
+flask_sqlalchemy
+werkzeug
+pyjwt
+fpdf2
+gunicorn

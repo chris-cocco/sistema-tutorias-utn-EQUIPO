@@ -8,7 +8,7 @@ import jwt
 import shutil, os, threading, time
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'clave_segura_sistema_tutorias_2026_utn'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_sistema_tutorias_2026_utn')
 CARPETA_BASE = os.path.dirname(__file__)
 RUTA_DB = os.path.join(CARPETA_BASE, "sistema_tutorias.db")
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{RUTA_DB}'
@@ -436,4 +436,6 @@ def reporte_general_pdf():
     return send_file(ruta, as_attachment=True, download_name="reporte_general.pdf")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    modo_debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    puerto = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=puerto, debug=modo_debug)
