@@ -6,6 +6,8 @@ from fpdf import FPDF
 from functools import wraps
 import jwt
 import shutil, os, threading, time
+import logging
+from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_sistema_tutorias_2026_utn')
@@ -16,6 +18,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 
 db = SQLAlchemy(app)
+
+# ===================== LOGS =====================
+CARPETA_LOGS = os.path.join(CARPETA_BASE, "logs")
+os.makedirs(CARPETA_LOGS, exist_ok=True)
+manejador_logs = RotatingFileHandler(os.path.join(CARPETA_LOGS, "sistema.log"), maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+manejador_logs.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+logger = logging.getLogger('sistema_tutorias')
+logger.setLevel(logging.INFO)
+logger.addHandler(manejador_logs)
 
 # ===================== MODELOS =====================
 class Usuario(db.Model):
@@ -162,12 +173,15 @@ def requiere_rol(*roles_permitidos):
             try:
                 payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWT_ALGORITMO])
             except jwt.ExpiredSignatureError:
+                logger.warning(f"Token expirado al acceder a {request.path} desde {request.remote_addr}")
                 flash("Tu sesión ha expirado, inicia sesión nuevamente", "error")
                 return redirect(url_for('login'))
             except jwt.InvalidTokenError:
+                logger.warning(f"Token inválido al acceder a {request.path} desde {request.remote_addr}")
                 flash("Sesión inválida", "error")
                 return redirect(url_for('login'))
             if roles_permitidos and payload['rol'] not in roles_permitidos:
+                logger.warning(f"Acceso denegado: rol '{payload['rol']}' intentó entrar a {request.path} desde {request.remote_addr}")
                 return redirect(url_for('login'))
             g.uid = payload['uid']
             g.rol = payload['rol']
@@ -187,10 +201,13 @@ def requiere_rol_api(*roles_permitidos):
             try:
                 payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWT_ALGORITMO])
             except jwt.ExpiredSignatureError:
+                logger.warning(f"[API] Token expirado al acceder a {request.path} desde {request.remote_addr}")
                 return {'error': 'El token ha expirado, inicia sesión nuevamente'}, 401
             except jwt.InvalidTokenError:
+                logger.warning(f"[API] Token inválido al acceder a {request.path} desde {request.remote_addr}")
                 return {'error': 'Token inválido'}, 401
             if roles_permitidos and payload['rol'] not in roles_permitidos:
+                logger.warning(f"[API] Acceso denegado: rol '{payload['rol']}' intentó entrar a {request.path} desde {request.remote_addr}")
                 return {'error': 'No tienes permiso para acceder a este recurso'}, 403
             g.uid = payload['uid']
             g.rol = payload['rol']
@@ -208,15 +225,18 @@ def login():
         passw = request.form['contrasena'].strip()
         usuario = Usuario.query.filter_by(credencial=cred).first()
         if not usuario or not check_password_hash(usuario.contrasena, passw):
+            logger.warning(f"Login fallido para credencial '{cred}' desde {ip}")
             flash("Credenciales incorrectas", "error")
             return redirect(url_for('login'))
         if usuario.bloqueado:
+            logger.warning(f"Intento de acceso de usuario bloqueado '{cred}' desde {ip}")
             flash("Usuario bloqueado", "error")
             return redirect(url_for('login'))
         usuario.intentos_fallidos = 0
         db.session.commit()
         db.session.add(Auditoria(accion=f"INGRESO: {usuario.tipo}", ip=ip, usuario=usuario.nombre_completo))
         db.session.commit()
+        logger.info(f"Login exitoso: {usuario.tipo} '{usuario.credencial}' desde {ip}")
         flash(f"Bienvenido {usuario.nombre_completo}", "success")
         token = generar_token(usuario)
         respuesta = redirect(url_for(f"panel_{usuario.tipo}"))
@@ -429,6 +449,7 @@ def respaldo_manual():
     shutil.copy2(RUTA_DB, ruta_destino)
     db.session.add(Auditoria(accion="RESPALDO MANUAL", ip=request.remote_addr, usuario=g.nombre))
     db.session.commit()
+    logger.info(f"Respaldo manual creado por '{g.nombre}' desde {request.remote_addr}: {nom}")
     flash(f"✅ Respaldo creado correctamente: {nom}", "success")
     return redirect(url_for('panel_coordinador'))
 
@@ -439,8 +460,11 @@ def restaurar(nombre):
     if os.path.exists(ruta_origen):
         shutil.copy2(ruta_origen, RUTA_DB)
         db.session.add(Auditoria(accion=f"RESTAURÓ: {nombre}", ip=request.remote_addr, usuario=g.nombre))
+        db.session.commit()
+        logger.info(f"Base de datos restaurada por '{g.nombre}' desde {request.remote_addr}: {nombre}")
         flash("✅ Base restaurada correctamente", "success")
     else:
+        logger.warning(f"'{g.nombre}' intentó restaurar un respaldo inexistente: {nombre}")
         flash("❌ Archivo de respaldo no encontrado", "error")
     return redirect(url_for('panel_coordinador'))
 
@@ -448,7 +472,9 @@ def restaurar(nombre):
 @requiere_rol('coordinador')
 def config_respaldos():
     cfg = ConfiguracionRespaldos.query.first(); cfg.activo = 'activo' in request.form; cfg.intervalo_horas = int(request.form['intervalo'])
-    db.session.commit(); flash("✅ Configuración guardada", "success")
+    db.session.commit()
+    logger.info(f"'{g.nombre}' actualizó la configuración de respaldos automáticos: activo={cfg.activo}, intervalo={cfg.intervalo_horas}h")
+    flash("✅ Configuración guardada", "success")
     return redirect(url_for('panel_coordinador'))
 
 @app.route('/reporte-general-pdf')
@@ -561,6 +587,11 @@ def api_coordinador_usuarios():
         'id': u.id, 'tipo': u.tipo, 'credencial': u.credencial,
         'nombre': u.nombre_completo, 'bloqueado': u.bloqueado
     } for u in Usuario.query.all()]}
+
+@app.errorhandler(500)
+def manejar_error_500(error):
+    logger.error(f"Error interno en {request.path} desde {request.remote_addr}: {error}")
+    return "Ocurrió un error interno, contacta al administrador.", 500
 
 if __name__ == '__main__':
     modo_debug = os.environ.get('FLASK_DEBUG', '0') == '1'

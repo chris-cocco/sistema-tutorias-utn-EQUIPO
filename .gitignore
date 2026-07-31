@@ -5,3 +5,4 @@ instance/
 *.db
 respaldos/
 reporte_*.pdf
+logs/

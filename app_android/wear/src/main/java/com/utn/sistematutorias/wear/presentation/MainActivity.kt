@@ -1,8 +1,12 @@
 package com.utn.sistematutorias.wear.presentation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
@@ -24,10 +29,24 @@ import com.utn.sistematutorias.wear.data.EstadoResumen
 import com.utn.sistematutorias.wear.data.ResumenTutorias
 
 class MainActivity : ComponentActivity() {
+
+    private val solicitarPermisoNotificaciones =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* sin acción: si se niega, simplemente no se notificará */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pedirPermisoNotificacionesSiHaceFalta()
         setContent {
             PantallaPrincipal()
+        }
+    }
+
+    private fun pedirPermisoNotificacionesSiHaceFalta() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val yaConcedido = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!yaConcedido) {
+            solicitarPermisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
