@@ -7,6 +7,7 @@ import com.utn.sistematutorias.data.local.AlmacenSesion
 import com.utn.sistematutorias.data.remote.ResumenCoordinadorResponse
 import com.utn.sistematutorias.data.remote.RetrofitClient
 import com.utn.sistematutorias.data.remote.Usuario
+import com.utn.sistematutorias.data.wear.SincronizadorReloj
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,12 +42,19 @@ class CoordinadorViewModel(application: Application) : AndroidViewModel(applicat
                 val respuestaUsuarios = RetrofitClient.api.usuariosCoordinador(token)
 
                 if (respuestaResumen.isSuccessful && respuestaUsuarios.isSuccessful) {
+                    val resumen = respuestaResumen.body()
                     _uiState.value = _uiState.value.copy(
                         nombre = sesion.nombre,
-                        resumen = respuestaResumen.body(),
+                        resumen = resumen,
                         usuarios = respuestaUsuarios.body()?.usuarios ?: emptyList(),
                         cargando = false
                     )
+                    if (resumen != null) {
+                        SincronizadorReloj.enviarResumen(
+                            getApplication(), "coordinador", sesion.nombre,
+                            resumen.tutorias.total, resumen.tutorias.solicitadas
+                        )
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(cargando = false, error = "No se pudieron cargar los datos")
                 }

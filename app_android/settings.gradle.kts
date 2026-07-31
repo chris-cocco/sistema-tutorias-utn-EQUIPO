@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Sistema Tutorias"
 include(":app")
+include(":wear")

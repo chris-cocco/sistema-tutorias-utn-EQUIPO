@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.utn.sistematutorias.data.local.AlmacenSesion
 import com.utn.sistematutorias.data.remote.RetrofitClient
 import com.utn.sistematutorias.data.remote.Tutoria
+import com.utn.sistematutorias.data.wear.SincronizadorReloj
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,11 +37,14 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val respuesta = RetrofitClient.api.tutoriasTutor("Bearer ${sesion.token}")
                 if (respuesta.isSuccessful && respuesta.body() != null) {
+                    val tutorias = respuesta.body()!!.tutorias
                     _uiState.value = _uiState.value.copy(
                         nombre = sesion.nombre,
-                        tutorias = respuesta.body()!!.tutorias,
+                        tutorias = tutorias,
                         cargando = false
                     )
+                    val pendientes = tutorias.count { it.estado == "Solicitada" }
+                    SincronizadorReloj.enviarResumen(getApplication(), "tutor", sesion.nombre, tutorias.size, pendientes)
                 } else {
                     _uiState.value = _uiState.value.copy(cargando = false, error = "No se pudieron cargar tus tutorías")
                 }
