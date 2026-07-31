@@ -53,7 +53,7 @@
                 <div class="card mb-6 p-6">
                     <h3 class="titulo-seccion mb-4">Mis Datos</h3>
                     <p class="mb-3"><strong>Nombre:</strong> {{tutor.usuario.nombre_completo}}</p>
-                    <form method="POST" action="{{url_for('actualizar_horario')}}" class="flex gap-2 mb-3">
+                    <form method="POST" action="{{url_for('actualizar_horario')}}" class="flex flex-col sm:flex-row gap-2 mb-3">
                         <input type="text" name="horario" class="input flex-1 py-2 px-3" value="{{tutor.horario}}" required>
                         <button class="btn rounded-xl">Actualizar Horario</button>
                     </form>
@@ -75,6 +75,7 @@
 
                 <div class="card p-6">
                     <h3 class="titulo-seccion mb-4">Tutorías a mi cargo</h3>
+                    <div class="overflow-x-auto">
                     <table class="table w-full">
                         <thead><tr><th>Alumno</th><th>Fecha</th><th>Tema</th><th>Estado</th><th>Acciones</th></tr></thead>
                         <tbody>
@@ -84,7 +85,7 @@
                                 <td>{{t.fecha.strftime('%d/%m/%Y')}}</td>
                                 <td>{{t.tema}}</td>
                                 <td><span class="badge {% if t.estado == 'Solicitada' %}badge-aviso{% elif t.estado == 'Realizada' %}badge-exito{% else %}badge-info{% endif %}">{{t.estado}}</span></td>
-                                <td>
+                                <td class="whitespace-nowrap">
                                     {% if t.estado == 'Solicitada' %}
                                     <a href="{{url_for('aceptar_tutoria', id=t.id)}}" class="btn btn-xs btn-success mr-1">Aceptar</a>
                                     <a href="{{url_for('form_editar_tutoria', id=t.id)}}" class="btn btn-xs btn-ut">Editar</a>
@@ -97,6 +98,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
