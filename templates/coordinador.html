@@ -74,6 +74,7 @@
 
                 <div class="card mb-6 p-6">
                     <h3 class="titulo-seccion mb-4">Administrar Usuarios</h3>
+                    <div class="overflow-x-auto">
                     <table class="table w-full">
                         <thead><tr><th>Rol</th><th>Credencial</th><th>Nombre</th><th>Estado</th><th>Asignar Tutor</th><th>Acción</th></tr></thead>
                         <tbody>
@@ -85,7 +86,7 @@
                                 <td><span class="badge {{'badge-error' if u.bloqueado else 'badge-exito'}}">{{'Bloqueado' if u.bloqueado else 'Activo'}}</span></td>
                                 <td>
                                     {% if u.tipo == 'alumno' and u.perfil_alumno %}
-                                    <form method="POST" action="{{url_for('asignar_tutor', id_alumno=u.perfil_alumno.id)}}" class="flex gap-1">
+                                    <form method="POST" action="{{url_for('asignar_tutor', id_alumno=u.perfil_alumno.id)}}" class="flex gap-1 items-center whitespace-nowrap">
                                         <select name="id_tutor" class="select w-32 py-1 px-2" required>
                                             <option value="">Selecciona</option>
                                             {% for t in usuarios %}{% if t.tipo == 'tutor' %}<option value="{{t.id}}">{{t.nombre_completo}}</option>{% endif %}{% endfor %}
@@ -99,6 +100,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
 
                 <div class="card mb-6 p-6">
@@ -122,12 +124,14 @@
 
                 <div class="card p-6">
                     <h3 class="titulo-seccion mb-4">Auditoría de Acciones</h3>
+                    <div class="overflow-x-auto">
                     <table class="table w-full">
                         <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>IP</th></tr></thead>
                         <tbody>
                             {% for a in auditoria %}<tr><td>{{a.fecha.strftime('%d/%m/%Y %H:%M')}}</td><td>{{a.usuario}}</td><td>{{a.accion}}</td><td>{{a.ip}}</td></tr>{% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
