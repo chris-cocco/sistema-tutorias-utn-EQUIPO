@@ -14,6 +14,7 @@ import com.utn.sistematutorias.data.remote.RetrofitClient
 import com.utn.sistematutorias.data.remote.Usuario
 import com.utn.sistematutorias.data.wear.SincronizadorReloj
 import com.utn.sistematutorias.util.abrirPdfDescargado
+import com.utn.sistematutorias.util.notificarPendientesEnTelefono
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,7 @@ data class CoordinadorUiState(
     val auditoria: List<AuditoriaItem> = emptyList(),
     val cargando: Boolean = true,
     val descargandoPdf: Boolean = false,
+    val relojConectado: Boolean? = null,
     val error: String? = null
 )
 
@@ -72,7 +74,11 @@ class CoordinadorViewModel(application: Application) : AndroidViewModel(applicat
                             getApplication(), "coordinador", sesion.nombre,
                             resumen.tutorias.total, resumen.tutorias.solicitadas
                         )
+                        notificarPendientesEnTelefono(getApplication(), resumen.tutorias.solicitadas)
                     }
+                    _uiState.value = _uiState.value.copy(
+                        relojConectado = SincronizadorReloj.hayRelojConectado(getApplication())
+                    )
                 } else {
                     _uiState.value = _uiState.value.copy(cargando = false, error = "No se pudieron cargar los datos")
                 }

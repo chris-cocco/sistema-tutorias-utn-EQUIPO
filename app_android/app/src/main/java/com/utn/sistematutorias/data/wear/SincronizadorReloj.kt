@@ -3,6 +3,8 @@ package com.utn.sistematutorias.data.wear
 import android.content.Context
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 private const val RUTA_RESUMEN = "/resumen_tutorias"
 
@@ -23,5 +25,16 @@ object SincronizadorReloj {
         }.asPutDataRequest().setUrgent()
 
         Wearable.getDataClient(contexto).putDataItem(solicitud)
+    }
+
+    /**
+     * Consulta si hay algún reloj (nodo Wear OS) realmente emparejado y
+     * conectado con este teléfono, para poder mostrarlo en la pantalla en
+     * vez de mandar los datos "a ciegas" sin saber si llegan a algún lado.
+     */
+    suspend fun hayRelojConectado(contexto: Context): Boolean = suspendCancellableCoroutine { continuacion ->
+        Wearable.getNodeClient(contexto).connectedNodes
+            .addOnSuccessListener { nodos -> continuacion.resume(nodos.isNotEmpty()) }
+            .addOnFailureListener { continuacion.resume(false) }
     }
 }

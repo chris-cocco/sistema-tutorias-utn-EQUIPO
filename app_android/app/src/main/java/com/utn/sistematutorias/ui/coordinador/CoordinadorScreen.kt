@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.utn.sistematutorias.data.remote.Usuario
 import com.utn.sistematutorias.ui.components.BarraDato
+import com.utn.sistematutorias.ui.components.EstadoReloj
 import com.utn.sistematutorias.ui.components.GraficaBarras
 import com.utn.sistematutorias.ui.components.TarjetaIndicador
 
@@ -131,6 +132,7 @@ fun CoordinadorScreen(
                                 enabled = !estado.descargandoPdf,
                                 modifier = Modifier.padding(top = 8.dp)
                             ) { Text(if (estado.descargandoPdf) "Generando..." else "Reporte General PDF") }
+                            EstadoReloj(conectado = estado.relojConectado, modifier = Modifier.padding(top = 8.dp))
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                             Text(

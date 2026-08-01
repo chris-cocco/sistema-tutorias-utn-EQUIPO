@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.utn.sistematutorias.ui.components.BarraDato
+import com.utn.sistematutorias.ui.components.EstadoReloj
 import com.utn.sistematutorias.ui.components.GraficaBarras
 import com.utn.sistematutorias.ui.components.TarjetaIndicador
 import com.utn.sistematutorias.ui.components.TutoriaCard
@@ -166,6 +167,7 @@ private fun SeccionMisDatos(estado: AlumnoUiState, vm: AlumnoViewModel) {
             modifier = Modifier.padding(top = 4.dp)
         )
     }
+    EstadoReloj(conectado = estado.relojConectado, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable

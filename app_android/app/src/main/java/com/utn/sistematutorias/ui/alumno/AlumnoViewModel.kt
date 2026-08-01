@@ -10,6 +10,7 @@ import com.utn.sistematutorias.data.remote.SolicitarTutoriaRequest
 import com.utn.sistematutorias.data.remote.Tutoria
 import com.utn.sistematutorias.data.wear.SincronizadorReloj
 import com.utn.sistematutorias.util.abrirPdfDescargado
+import com.utn.sistematutorias.util.notificarPendientesEnTelefono
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,7 @@ data class AlumnoUiState(
     val enviandoSolicitud: Boolean = false,
     val descargandoPdf: Boolean = false,
     val actualizandoNombre: Boolean = false,
+    val relojConectado: Boolean? = null,
     val error: String? = null,
     val mensajeNombre: String? = null
 ) {
@@ -61,6 +63,10 @@ class AlumnoViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.value = _uiState.value.copy(tutorias = tutorias, cargando = false)
                     val pendientes = tutorias.count { it.estado in ESTADOS_PENDIENTES }
                     SincronizadorReloj.enviarResumen(getApplication(), "alumno", sesion.nombre, tutorias.size, pendientes)
+                    notificarPendientesEnTelefono(getApplication(), pendientes)
+                    _uiState.value = _uiState.value.copy(
+                        relojConectado = SincronizadorReloj.hayRelojConectado(getApplication())
+                    )
                 } else {
                     _uiState.value = _uiState.value.copy(cargando = false, error = "No se pudieron cargar tus tutorías")
                 }
