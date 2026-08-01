@@ -539,6 +539,17 @@ def api_alumno_solicitar_tutoria():
     db.session.commit()
     return {'mensaje': 'Solicitud enviada al tutor', 'tutoria': tutoria_a_json(nueva)}, 201
 
+@app.route('/api/alumno/nombre', methods=['POST'])
+@requiere_rol_api('alumno')
+def api_alumno_actualizar_nombre():
+    usuario = Usuario.query.get(g.uid)
+    nombre = (request.get_json(silent=True) or {}).get('nombre', '').strip()
+    if not nombre:
+        return {'error': 'El nombre no puede estar vacío'}, 400
+    usuario.nombre_completo = nombre
+    db.session.commit()
+    return {'mensaje': 'Nombre actualizado', 'nombre': usuario.nombre_completo}
+
 @app.route('/api/tutor/tutorias')
 @requiere_rol_api('tutor')
 def api_tutor_tutorias():
