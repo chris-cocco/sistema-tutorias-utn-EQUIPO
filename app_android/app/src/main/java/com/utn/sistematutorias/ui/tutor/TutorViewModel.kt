@@ -62,8 +62,14 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val sesion = almacenSesion.sesion.first() ?: return@launch
             try {
-                accion("Bearer ${sesion.token}")
-                cargarTutorias()
+                val respuesta = accion("Bearer ${sesion.token}")
+                if (respuesta.isSuccessful) {
+                    cargarTutorias()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        error = "No se pudo actualizar la tutoría (${respuesta.code()}). Puede que ya no exista, intenta recargar."
+                    )
+                }
             } catch (excepcion: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Sin conexión con el servidor")
             }

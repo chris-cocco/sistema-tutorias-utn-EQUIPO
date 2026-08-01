@@ -1,6 +1,7 @@
 package com.utn.sistematutorias.ui.tutor
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,7 +59,14 @@ fun TutorScreen(
                 estado.error != null -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
-                ) { Text(estado.error ?: "") }
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(estado.error ?: "")
+                        Button(onClick = { vm.cargarTutorias() }, modifier = Modifier.padding(top = 12.dp)) {
+                            Text("Reintentar")
+                        }
+                    }
+                }
 
                 estado.tutorias.isEmpty() -> Box(
                     modifier = Modifier.fillMaxSize(),
