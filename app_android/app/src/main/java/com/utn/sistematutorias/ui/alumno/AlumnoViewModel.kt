@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.utn.sistematutorias.data.local.AlmacenSesion
+import com.utn.sistematutorias.data.remote.NombreRequest
 import com.utn.sistematutorias.data.remote.RetrofitClient
 import com.utn.sistematutorias.data.remote.SolicitarTutoriaRequest
 import com.utn.sistematutorias.data.remote.Tutoria
@@ -25,7 +26,9 @@ data class AlumnoUiState(
     val cargando: Boolean = true,
     val enviandoSolicitud: Boolean = false,
     val descargandoPdf: Boolean = false,
-    val error: String? = null
+    val actualizandoNombre: Boolean = false,
+    val error: String? = null,
+    val mensajeNombre: String? = null
 ) {
     val reporte: ReporteIndicadores
         get() = ReporteIndicadores(
@@ -47,17 +50,15 @@ class AlumnoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun cargarTutorias() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(cargando = true, error = null)
             val sesion = almacenSesion.sesion.first() ?: return@launch
+            // El nombre viene de la sesión guardada localmente, así que se
+            // muestra de inmediato aunque la carga de tutorías falle o tarde.
+            _uiState.value = _uiState.value.copy(cargando = true, error = null, nombre = sesion.nombre)
             try {
                 val respuesta = RetrofitClient.api.tutoriasAlumno("Bearer ${sesion.token}")
                 if (respuesta.isSuccessful && respuesta.body() != null) {
                     val tutorias = respuesta.body()!!.tutorias
-                    _uiState.value = _uiState.value.copy(
-                        nombre = sesion.nombre,
-                        tutorias = tutorias,
-                        cargando = false
-                    )
+                    _uiState.value = _uiState.value.copy(tutorias = tutorias, cargando = false)
                     val pendientes = tutorias.count { it.estado in ESTADOS_PENDIENTES }
                     SincronizadorReloj.enviarResumen(getApplication(), "alumno", sesion.nombre, tutorias.size, pendientes)
                 } else {
@@ -92,6 +93,25 @@ class AlumnoViewModel(application: Application) : AndroidViewModel(application) 
             } catch (excepcion: Exception) {
                 _uiState.value = _uiState.value.copy(enviandoSolicitud = false)
                 alTerminar(false, "Sin conexión con el servidor")
+            }
+        }
+    }
+
+    fun actualizarNombre(nombre: String) {
+        if (nombre.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(actualizandoNombre = true, mensajeNombre = null)
+            val sesion = almacenSesion.sesion.first() ?: return@launch
+            try {
+                val respuesta = RetrofitClient.api.actualizarNombreAlumno("Bearer ${sesion.token}", NombreRequest(nombre))
+                if (respuesta.isSuccessful) {
+                    almacenSesion.guardarSesion(sesion.token, sesion.rol, nombre)
+                    _uiState.value = _uiState.value.copy(actualizandoNombre = false, nombre = nombre, mensajeNombre = "Nombre actualizado")
+                } else {
+                    _uiState.value = _uiState.value.copy(actualizandoNombre = false, mensajeNombre = "No se pudo actualizar el nombre")
+                }
+            } catch (excepcion: Exception) {
+                _uiState.value = _uiState.value.copy(actualizandoNombre = false, mensajeNombre = "Sin conexión con el servidor")
             }
         }
     }

@@ -86,25 +86,12 @@ fun TutorScreen(
         }
     ) { relleno ->
         Box(modifier = Modifier.padding(relleno)) {
-            when {
-                estado.cargando -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-
-                estado.error != null -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(estado.error ?: "")
-                        Button(onClick = { vm.cargarTutorias() }, modifier = Modifier.padding(top = 12.dp)) {
-                            Text("Reintentar")
-                        }
-                    }
+            if (estado.cargando) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-
-                else -> LazyColumn(
+            } else {
+                LazyColumn(
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -119,17 +106,25 @@ fun TutorScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        if (estado.tutorias.isEmpty()) {
+                    }
+                    when {
+                        estado.error != null -> item {
+                            Column {
+                                Text(estado.error ?: "", color = MaterialTheme.colorScheme.error)
+                                TextButton(onClick = { vm.cargarTutorias() }) { Text("Reintentar") }
+                            }
+                        }
+                        estado.tutorias.isEmpty() -> item {
                             Text("No tienes tutorías asignadas", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    }
-                    items(estado.tutorias) { tutoria ->
-                        TutoriaCard(tutoria = tutoria, mostrarAlumno = true) {
-                            AccionesTutoria(
-                                tutoria = tutoria,
-                                vm = vm,
-                                alEditar = { tutoriaEditando = tutoria }
-                            )
+                        else -> items(estado.tutorias) { tutoria ->
+                            TutoriaCard(tutoria = tutoria, mostrarAlumno = true) {
+                                AccionesTutoria(
+                                    tutoria = tutoria,
+                                    vm = vm,
+                                    alEditar = { tutoriaEditando = tutoria }
+                                )
+                            }
                         }
                     }
                 }

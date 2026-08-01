@@ -80,6 +80,8 @@ data class ErrorResponse(
 
 data class HorarioRequest(val horario: String)
 
+data class NombreRequest(val nombre: String)
+
 data class AlumnoAsignado(val id: Int, val nombre: String)
 
 data class AlumnosResponse(val alumnos: List<AlumnoAsignado>)

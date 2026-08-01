@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,54 +81,41 @@ fun AlumnoScreen(
         }
     ) { relleno ->
         Box(modifier = Modifier.padding(relleno)) {
-            when {
-                estado.cargando -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-
-                estado.error != null -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { Text(estado.error ?: "") }
-
-                estado.tutorias.isEmpty() -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { Text("Aún no tienes tutorías registradas") }
-
-                else -> LazyColumn(
+            if (estado.cargando) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn(
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     item {
-                        val reporte = estado.reporte
+                        SeccionMisDatos(estado = estado, vm = vm)
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                        SeccionMisReportes(estado = estado, vm = vm)
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                         Text(
-                            text = "Mis Reportes",
+                            text = "Mis Tutorías",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        FlowRow(modifier = Modifier.fillMaxWidth()) {
-                            TarjetaIndicador("Total", reporte.total)
-                            TarjetaIndicador("Realizadas", reporte.realizadas)
-                            TarjetaIndicador("Pendientes", reporte.pendientes)
-                        }
-                        GraficaBarras(
-                            datos = listOf(
-                                BarraDato("Realizadas", reporte.realizadas, Color(0xFF15803D)),
-                                BarraDato("Pendientes", reporte.pendientes, Color(0xFFB45309))
-                            )
-                        )
-                        OutlinedButton(
-                            onClick = { vm.descargarReportePdf() },
-                            enabled = !estado.descargandoPdf,
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) { Text(if (estado.descargandoPdf) "Generando..." else "Descargar reporte PDF") }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                     }
-                    items(estado.tutorias) { tutoria ->
-                        TutoriaCard(tutoria = tutoria)
+                    when {
+                        estado.error != null -> item {
+                            Column {
+                                Text(estado.error ?: "", color = MaterialTheme.colorScheme.error)
+                                TextButton(onClick = { vm.cargarTutorias() }) { Text("Reintentar") }
+                            }
+                        }
+                        estado.tutorias.isEmpty() -> item {
+                            Text(
+                                "Aún no tienes tutorías registradas",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> items(estado.tutorias) { tutoria -> TutoriaCard(tutoria = tutoria) }
                     }
                 }
             }
@@ -145,6 +133,66 @@ fun AlumnoScreen(
             }
         )
     }
+}
+
+@Composable
+private fun SeccionMisDatos(estado: AlumnoUiState, vm: AlumnoViewModel) {
+    var nombreTexto by remember(estado.nombre) { mutableStateOf(estado.nombre) }
+
+    Text(
+        text = "Mis Datos",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = nombreTexto,
+            onValueChange = { nombreTexto = it },
+            label = { Text("Nombre") },
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.padding(4.dp))
+        Button(
+            onClick = { vm.actualizarNombre(nombreTexto) },
+            enabled = !estado.actualizandoNombre
+        ) { Text(if (estado.actualizandoNombre) "..." else "Guardar") }
+    }
+    if (estado.mensajeNombre != null) {
+        Text(
+            estado.mensajeNombre,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun SeccionMisReportes(estado: AlumnoUiState, vm: AlumnoViewModel) {
+    val reporte = estado.reporte
+    Text(
+        text = "Mis Reportes",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    FlowRow(modifier = Modifier.fillMaxWidth()) {
+        TarjetaIndicador("Total", reporte.total)
+        TarjetaIndicador("Realizadas", reporte.realizadas)
+        TarjetaIndicador("Pendientes", reporte.pendientes)
+    }
+    GraficaBarras(
+        datos = listOf(
+            BarraDato("Realizadas", reporte.realizadas, Color(0xFF15803D)),
+            BarraDato("Pendientes", reporte.pendientes, Color(0xFFB45309))
+        )
+    )
+    OutlinedButton(
+        onClick = { vm.descargarReportePdf() },
+        enabled = !estado.descargandoPdf,
+        modifier = Modifier.padding(top = 8.dp)
+    ) { Text(if (estado.descargandoPdf) "Generando..." else "Descargar reporte PDF") }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

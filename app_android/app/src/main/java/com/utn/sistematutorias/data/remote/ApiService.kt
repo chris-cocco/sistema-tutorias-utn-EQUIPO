@@ -41,6 +41,12 @@ interface ApiService {
         @Path("id") id: Int
     ): Response<MensajeResponse>
 
+    @POST("api/alumno/nombre")
+    suspend fun actualizarNombreAlumno(
+        @Header("Authorization") token: String,
+        @Body datos: NombreRequest
+    ): Response<MensajeResponse>
+
     @POST("api/tutor/tutorias/{id}/editar")
     suspend fun editarTutoria(
         @Header("Authorization") token: String,

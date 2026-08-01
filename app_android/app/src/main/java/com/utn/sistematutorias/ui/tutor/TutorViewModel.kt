@@ -53,15 +53,16 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cargarTutorias() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(cargando = true, error = null)
             val sesion = almacenSesion.sesion.first() ?: return@launch
+            // El nombre viene de la sesión guardada localmente, así que se
+            // muestra de inmediato aunque la carga de tutorías falle o tarde.
+            _uiState.value = _uiState.value.copy(cargando = true, error = null, nombre = sesion.nombre)
             try {
                 val respuesta = RetrofitClient.api.tutoriasTutor("Bearer ${sesion.token}")
                 val cuerpo = respuesta.body()
                 if (respuesta.isSuccessful && cuerpo != null) {
                     val tutorias = cuerpo.tutorias
                     _uiState.value = _uiState.value.copy(
-                        nombre = sesion.nombre,
                         tutorias = tutorias,
                         horario = cuerpo.horario ?: _uiState.value.horario,
                         cargando = false
