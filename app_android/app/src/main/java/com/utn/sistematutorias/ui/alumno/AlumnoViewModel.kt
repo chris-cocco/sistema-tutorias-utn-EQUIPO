@@ -8,6 +8,7 @@ import com.utn.sistematutorias.data.remote.RetrofitClient
 import com.utn.sistematutorias.data.remote.SolicitarTutoriaRequest
 import com.utn.sistematutorias.data.remote.Tutoria
 import com.utn.sistematutorias.data.wear.SincronizadorReloj
+import com.utn.sistematutorias.util.abrirPdfDescargado
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,13 +17,23 @@ import kotlinx.coroutines.launch
 
 private val ESTADOS_PENDIENTES = setOf("Solicitada", "Confirmada", "Asignada por tutor")
 
+data class ReporteIndicadores(val total: Int, val realizadas: Int, val pendientes: Int)
+
 data class AlumnoUiState(
     val nombre: String = "",
     val tutorias: List<Tutoria> = emptyList(),
     val cargando: Boolean = true,
     val enviandoSolicitud: Boolean = false,
+    val descargandoPdf: Boolean = false,
     val error: String? = null
-)
+) {
+    val reporte: ReporteIndicadores
+        get() = ReporteIndicadores(
+            total = tutorias.size,
+            realizadas = tutorias.count { it.estado == "Realizada" },
+            pendientes = tutorias.count { it.estado in ESTADOS_PENDIENTES }
+        )
+}
 
 class AlumnoViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -81,6 +92,25 @@ class AlumnoViewModel(application: Application) : AndroidViewModel(application) 
             } catch (excepcion: Exception) {
                 _uiState.value = _uiState.value.copy(enviandoSolicitud = false)
                 alTerminar(false, "Sin conexión con el servidor")
+            }
+        }
+    }
+
+    fun descargarReportePdf() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(descargandoPdf = true)
+            val sesion = almacenSesion.sesion.first() ?: return@launch
+            try {
+                val respuesta = RetrofitClient.api.reporteAlumnoPdf("Bearer ${sesion.token}")
+                val cuerpo = respuesta.body()
+                if (respuesta.isSuccessful && cuerpo != null) {
+                    abrirPdfDescargado(getApplication(), cuerpo, "mis_tutorias.pdf")
+                    _uiState.value = _uiState.value.copy(descargandoPdf = false)
+                } else {
+                    _uiState.value = _uiState.value.copy(descargandoPdf = false, error = "No se pudo generar el reporte PDF")
+                }
+            } catch (excepcion: Exception) {
+                _uiState.value = _uiState.value.copy(descargandoPdf = false, error = "Sin conexión con el servidor")
             }
         }
     }
