@@ -227,4 +227,12 @@ class CoordinadorViewModel(application: Application) : AndroidViewModel(applicat
             alTerminar()
         }
     }
+
+    fun buscarReloj() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                relojConectado = SincronizadorReloj.hayRelojConectado(getApplication())
+            )
+        }
+    }
 }

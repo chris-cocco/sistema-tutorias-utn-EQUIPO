@@ -141,6 +141,14 @@ class AlumnoViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun buscarReloj() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                relojConectado = SincronizadorReloj.hayRelojConectado(getApplication())
+            )
+        }
+    }
+
     fun cerrarSesion(alTerminar: () -> Unit) {
         viewModelScope.launch {
             almacenSesion.cerrarSesion()

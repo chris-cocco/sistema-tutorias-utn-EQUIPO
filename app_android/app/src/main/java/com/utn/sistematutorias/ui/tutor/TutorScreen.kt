@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -55,6 +56,7 @@ import com.utn.sistematutorias.ui.components.EstadoReloj
 import com.utn.sistematutorias.ui.components.GraficaBarras
 import com.utn.sistematutorias.ui.components.TarjetaIndicador
 import com.utn.sistematutorias.ui.components.TutoriaCard
+import com.utn.sistematutorias.util.abrirEmparejamientoReloj
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -184,7 +186,15 @@ private fun SeccionMisDatos(estado: TutorUiState, vm: TutorViewModel) {
         enabled = !estado.descargandoPdf,
         modifier = Modifier.padding(top = 8.dp)
     ) { Text(if (estado.descargandoPdf) "Generando..." else "Descargar reporte PDF") }
-    EstadoReloj(conectado = estado.relojConectado, modifier = Modifier.padding(top = 8.dp))
+    val contexto = LocalContext.current
+    EstadoReloj(
+        conectado = estado.relojConectado,
+        onBuscar = {
+            vm.buscarReloj()
+            if (estado.relojConectado != true) abrirEmparejamientoReloj(contexto)
+        },
+        modifier = Modifier.padding(top = 8.dp)
+    )
 }
 
 @Composable
