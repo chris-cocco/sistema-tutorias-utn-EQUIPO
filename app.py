@@ -561,6 +561,60 @@ def api_tutor_completar(id):
     db.session.commit()
     return {'mensaje': 'Tutoría marcada como realizada', 'tutoria': tutoria_a_json(tut)}
 
+@app.route('/api/tutor/tutorias/<int:id>/editar', methods=['POST'])
+@requiere_rol_api('tutor')
+def api_tutor_editar_tutoria(id):
+    tut = Tutoria.query.get_or_404(id)
+    datos = request.get_json(silent=True) or {}
+    try:
+        tut.fecha = datetime.strptime(datos.get('fecha', ''), '%Y-%m-%d')
+    except ValueError:
+        return {'error': 'Fecha inválida, usa el formato AAAA-MM-DD'}, 400
+    tema = (datos.get('tema') or '').strip()
+    if not tema:
+        return {'error': 'El tema no puede estar vacío'}, 400
+    tut.tema = tema
+    tut.estado = datos.get('estado') or tut.estado
+    tut.observaciones = datos.get('observaciones') or ''
+    db.session.commit()
+    return {'mensaje': 'Tutoría actualizada', 'tutoria': tutoria_a_json(tut)}
+
+@app.route('/api/tutor/alumnos')
+@requiere_rol_api('tutor')
+def api_tutor_alumnos():
+    alumnos = Alumno.query.filter_by(id_tutor=g.uid).all()
+    return {'alumnos': [{'id': a.id, 'nombre': a.usuario.nombre_completo} for a in alumnos]}
+
+@app.route('/api/tutor/tutorias', methods=['POST'])
+@requiere_rol_api('tutor')
+def api_tutor_crear_tutoria():
+    datos = request.get_json(silent=True) or {}
+    try:
+        fecha = datetime.strptime(datos.get('fecha', ''), '%Y-%m-%d')
+    except ValueError:
+        return {'error': 'Fecha inválida, usa el formato AAAA-MM-DD'}, 400
+    tema = (datos.get('tema') or '').strip()
+    if not tema:
+        return {'error': 'El tema no puede estar vacío'}, 400
+    id_alumno = datos.get('id_alumno')
+    if not Alumno.query.get(id_alumno):
+        return {'error': 'Alumno no encontrado'}, 404
+    nueva = Tutoria(id_alumno=id_alumno, id_tutor=g.uid, fecha=fecha, tema=tema, estado="Asignada por tutor")
+    db.session.add(nueva)
+    db.session.commit()
+    return {'mensaje': 'Tutoría creada', 'tutoria': tutoria_a_json(nueva)}, 201
+
+@app.route('/api/tutor/horario', methods=['POST'])
+@requiere_rol_api('tutor')
+def api_tutor_actualizar_horario():
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
+    horario = (request.get_json(silent=True) or {}).get('horario', '').strip()
+    if not horario:
+        return {'error': 'El horario no puede estar vacío'}, 400
+    tutor.horario = horario
+    db.session.commit()
+    return {'mensaje': 'Horario actualizado', 'horario': tutor.horario}
+
 @app.route('/api/coordinador/resumen')
 @requiere_rol_api('coordinador')
 def api_coordinador_resumen():
@@ -587,6 +641,101 @@ def api_coordinador_usuarios():
         'id': u.id, 'tipo': u.tipo, 'credencial': u.credencial,
         'nombre': u.nombre_completo, 'bloqueado': u.bloqueado
     } for u in Usuario.query.all()]}
+
+@app.route('/api/coordinador/usuarios', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_crear_usuario():
+    datos = request.get_json(silent=True) or {}
+    tipo = datos.get('tipo'); cred = (datos.get('credencial') or '').strip()
+    nombre = (datos.get('nombre') or '').strip(); clave = datos.get('contrasena') or ''
+    if tipo not in ('alumno', 'tutor', 'coordinador') or not cred or not nombre or not clave:
+        return {'error': 'Faltan datos o el rol no es válido'}, 400
+    if Usuario.query.filter_by(credencial=cred).first():
+        return {'error': 'Credencial ya existe'}, 400
+    nuevo = Usuario(tipo=tipo, credencial=cred, nombre_completo=nombre, contrasena=generate_password_hash(clave))
+    db.session.add(nuevo); db.session.flush()
+    if tipo == "alumno": db.session.add(Alumno(usuario_id=nuevo.id, id_tutor=None))
+    if tipo == "tutor": db.session.add(Tutor(usuario_id=nuevo.id))
+    db.session.add(Auditoria(accion=f"CREÓ USUARIO (app móvil): {cred}", ip=request.remote_addr, usuario=g.nombre))
+    db.session.commit()
+    return {'mensaje': 'Usuario creado correctamente'}, 201
+
+@app.route('/api/coordinador/usuarios/<int:id_alumno>/asignar-tutor', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_asignar_tutor(id_alumno):
+    alumno = Alumno.query.get_or_404(id_alumno)
+    id_tutor = (request.get_json(silent=True) or {}).get('id_tutor')
+    if not Usuario.query.filter_by(id=id_tutor, tipo='tutor').first():
+        return {'error': 'Tutor no válido'}, 400
+    alumno.id_tutor = id_tutor
+    db.session.commit()
+    return {'mensaje': 'Tutor asignado correctamente'}
+
+@app.route('/api/coordinador/usuarios/<int:id>/estado', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_cambiar_estado(id):
+    u = Usuario.query.get_or_404(id)
+    u.bloqueado = not u.bloqueado; u.intentos_fallidos = 0
+    db.session.commit()
+    return {'mensaje': 'Estado de usuario actualizado', 'bloqueado': u.bloqueado}
+
+@app.route('/api/coordinador/respaldos')
+@requiere_rol_api('coordinador')
+def api_coordinador_respaldos():
+    cfg = ConfiguracionRespaldos.query.first()
+    return {
+        'respaldos': sorted(os.listdir(CARPETA_RESPALDOS), reverse=True),
+        'activo': cfg.activo,
+        'intervalo_horas': cfg.intervalo_horas,
+    }
+
+@app.route('/api/coordinador/respaldos', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_respaldo_manual():
+    nom = f"respaldo_manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    ruta_destino = os.path.join(CARPETA_RESPALDOS, nom)
+    shutil.copy2(RUTA_DB, ruta_destino)
+    db.session.add(Auditoria(accion="RESPALDO MANUAL (app móvil)", ip=request.remote_addr, usuario=g.nombre))
+    db.session.commit()
+    logger.info(f"Respaldo manual creado por '{g.nombre}' (app móvil) desde {request.remote_addr}: {nom}")
+    return {'mensaje': 'Respaldo creado correctamente', 'nombre': nom}, 201
+
+@app.route('/api/coordinador/respaldos/restaurar', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_restaurar():
+    nombre = (request.get_json(silent=True) or {}).get('nombre', '')
+    ruta_origen = os.path.join(CARPETA_RESPALDOS, nombre)
+    if not os.path.exists(ruta_origen):
+        logger.warning(f"'{g.nombre}' (app móvil) intentó restaurar un respaldo inexistente: {nombre}")
+        return {'error': 'Archivo de respaldo no encontrado'}, 404
+    shutil.copy2(ruta_origen, RUTA_DB)
+    db.session.add(Auditoria(accion=f"RESTAURÓ (app móvil): {nombre}", ip=request.remote_addr, usuario=g.nombre))
+    db.session.commit()
+    logger.info(f"Base de datos restaurada por '{g.nombre}' (app móvil) desde {request.remote_addr}: {nombre}")
+    return {'mensaje': 'Base restaurada correctamente'}
+
+@app.route('/api/coordinador/config-respaldos', methods=['POST'])
+@requiere_rol_api('coordinador')
+def api_coordinador_config_respaldos():
+    datos = request.get_json(silent=True) or {}
+    cfg = ConfiguracionRespaldos.query.first()
+    cfg.activo = bool(datos.get('activo'))
+    try:
+        cfg.intervalo_horas = int(datos.get('intervalo_horas'))
+    except (TypeError, ValueError):
+        return {'error': 'Intervalo inválido'}, 400
+    db.session.commit()
+    logger.info(f"'{g.nombre}' (app móvil) actualizó la configuración de respaldos automáticos: activo={cfg.activo}, intervalo={cfg.intervalo_horas}h")
+    return {'mensaje': 'Configuración guardada'}
+
+@app.route('/api/coordinador/auditoria')
+@requiere_rol_api('coordinador')
+def api_coordinador_auditoria():
+    registros = Auditoria.query.order_by(Auditoria.fecha.desc()).limit(30).all()
+    return {'auditoria': [{
+        'accion': a.accion, 'fecha': a.fecha.strftime('%Y-%m-%d %H:%M'),
+        'ip': a.ip, 'usuario': a.usuario
+    } for a in registros]}
 
 @app.errorhandler(500)
 def manejar_error_500(error):
