@@ -542,8 +542,9 @@ def api_alumno_solicitar_tutoria():
 @app.route('/api/tutor/tutorias')
 @requiere_rol_api('tutor')
 def api_tutor_tutorias():
+    tutor = Tutor.query.filter_by(usuario_id=g.uid).first()
     tutorias = Tutoria.query.filter_by(id_tutor=g.uid).order_by(Tutoria.fecha.desc()).all()
-    return {'tutorias': [tutoria_a_json(t) for t in tutorias]}
+    return {'tutorias': [tutoria_a_json(t) for t in tutorias], 'horario': tutor.horario if tutor else ''}
 
 @app.route('/api/tutor/tutorias/<int:id>/aceptar', methods=['POST'])
 @requiere_rol_api('tutor')
